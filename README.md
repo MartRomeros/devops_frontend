@@ -78,18 +78,33 @@ docker-compose down
 
 ---
 
-## Pipeline CI/CD (GitHub Actions)
+## Pipeline de Integración y Despliegue Continuo (CI/CD)
 
-Este proyecto incluye un pipeline de Integración Continua (CI) implementado con **GitHub Actions**. El archivo de configuración se encuentra en `.github/workflows/ci.yml`.
+Este proyecto incluye un pipeline completo de Integración y Despliegue Continuo implementado con **GitHub Actions**. El archivo de configuración se encuentra en `.github/workflows/ci-cd.yml`.
 
-Cada vez que se realiza un `push` o se abre un `pull request` hacia las ramas `main` o `master`, el pipeline ejecuta automáticamente los siguientes pasos para asegurar la calidad del código:
+El pipeline utiliza **triggers basados en la rama `deploy`**. Cada vez que se realiza un `push` a esta rama, se ejecutan automáticamente los siguientes procesos (pasos documentados en el workflow):
 
-1. **Instalación y Verificación (Node.js):** 
-   - Instala las dependencias (`npm install`).
-   - Ejecuta el linter para mantener estándares de código (`npm run lint`).
-   - Comprueba que el proyecto compila correctamente (`npm run build`).
-2. **Validación de Docker:**
-   - Construye la imagen de Docker usando `docker-compose build` para asegurar que el `Dockerfile` y las configuraciones no se hayan roto con los nuevos cambios.
+### 1. Construcción y Publicación de la Imagen (Docker Hub)
+El job `build-and-push` se encarga de:
+- Iniciar sesión en Docker Hub utilizando credenciales seguras.
+- Construir la imagen de Docker a partir del `Dockerfile` (usando Buildx).
+- Publicar (push) la nueva imagen etiquetada como `latest` en tu repositorio de Docker Hub.
+
+### 2. Despliegue Automático en Instancia EC2
+El job `deploy-to-ec2` se encarga de:
+- Conectarse vía SSH a la instancia de AWS EC2 utilizando la Action `appleboy/ssh-action`.
+- Descargar (`pull`) la última versión de la imagen publicada en Docker Hub.
+- Detener y eliminar el contenedor que se encuentre en ejecución.
+- Iniciar un nuevo contenedor con los cambios actualizados.
+
+### Manejo de Secrets (GitHub Secrets)
+Para que el pipeline se ejecute correctamente y mantener la seguridad, es **obligatorio** configurar las siguientes variables secretas (Secrets) en la configuración del repositorio de GitHub (`Settings > Secrets and variables > Actions`):
+
+- `DOCKER_USERNAME`: Tu nombre de usuario en Docker Hub.
+- `DOCKER_PASSWORD`: Tu contraseña o token de acceso (Access Token) de Docker Hub.
+- `EC2_HOST`: La dirección IP pública o el DNS público de tu instancia EC2.
+- `EC2_USERNAME`: El usuario para acceder por SSH a la instancia EC2 (por ejemplo, `ubuntu` o `ec2-user`).
+- `EC2_SSH_KEY`: El contenido de tu llave privada `.pem` de AWS para acceder a la instancia EC2 por SSH.
 
 ---
 
