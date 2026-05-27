@@ -9,8 +9,8 @@ export const FormCierreDespacho = ({ despacho, onClose }) => {
   const onSubmit = async (data) => {
     console.log("onSubmit ejecutado");
     const jsonData = {
-      intento: data.intento,
-      despachado: data.despachado,
+      intento: Number(data.intento),
+      despachado: data.despachado === "true",
     };
 
     console.log("Datos del formulario:", jsonData);
@@ -91,7 +91,7 @@ export const FormCierreDespacho = ({ despacho, onClose }) => {
         <div className="mb-5">
           <label className="block font-bold mb-2">Despacho entregado</label>
           <select
-            defaultValue={false}
+            defaultValue={String(despacho.despachado)}
             className="border border-gray-300 rounded-lg block w-full  p-1"
             {...register("despachado", { required: true })}
           >
