@@ -32,11 +32,15 @@ Para ejecucion en contenedor, la imagen usa variables de runtime:
 
 - `APP_VENTAS_API_URL`
 - `APP_DESPACHOS_API_URL`
+- `PRIVATE_VENTAS_API_URL`
+- `PRIVATE_DESPACHOS_API_URL`
 
 Si no se definen, el contenedor usa estos valores por defecto:
 
-- `http://localhost:8082/api/v1`
-- `http://localhost:8081/api/v1`
+- `APP_VENTAS_API_URL=/api/ventas`
+- `APP_DESPACHOS_API_URL=/api/despachos`
+- `PRIVATE_VENTAS_API_URL=http://localhost:8082/api/v1`
+- `PRIVATE_DESPACHOS_API_URL=http://localhost:8081/api/v1`
 
 ## Instalacion de dependencias
 
@@ -95,8 +99,10 @@ docker build -t front-despacho .
 
 ```bash
 docker run --rm -p 8080:80 ^
-  -e APP_VENTAS_API_URL=http://host.docker.internal:8082/api/v1 ^
-  -e APP_DESPACHOS_API_URL=http://host.docker.internal:8081/api/v1 ^
+  -e APP_VENTAS_API_URL=/api/ventas ^
+  -e APP_DESPACHOS_API_URL=/api/despachos ^
+  -e PRIVATE_VENTAS_API_URL=http://host.docker.internal:8082/api/v1 ^
+  -e PRIVATE_DESPACHOS_API_URL=http://host.docker.internal:8081/api/v1 ^
   front-despacho
 ```
 
@@ -104,8 +110,10 @@ En sistemas tipo Unix, el mismo comando seria:
 
 ```bash
 docker run --rm -p 8080:80 \
-  -e APP_VENTAS_API_URL=http://host.docker.internal:8082/api/v1 \
-  -e APP_DESPACHOS_API_URL=http://host.docker.internal:8081/api/v1 \
+  -e APP_VENTAS_API_URL=/api/ventas \
+  -e APP_DESPACHOS_API_URL=/api/despachos \
+  -e PRIVATE_VENTAS_API_URL=http://host.docker.internal:8082/api/v1 \
+  -e PRIVATE_DESPACHOS_API_URL=http://host.docker.internal:8081/api/v1 \
   front-despacho
 ```
 
@@ -117,12 +125,39 @@ La aplicacion carga `/config.js` antes del bundle principal. Ese archivo es gene
 
 ```js
 window.__APP_CONFIG__ = {
-  APP_VENTAS_API_URL: "http://host.docker.internal:8082/api/v1",
-  APP_DESPACHOS_API_URL: "http://host.docker.internal:8081/api/v1",
+  APP_VENTAS_API_URL: "/api/ventas",
+  APP_DESPACHOS_API_URL: "/api/despachos",
 };
 ```
 
-Con esto, la misma imagen Docker puede reutilizarse en distintos ambientes sin recompilar.
+Con esto, el navegador llama al mismo host publico del frontend y nginx reenvia las peticiones hacia las APIs configuradas en `PRIVATE_VENTAS_API_URL` y `PRIVATE_DESPACHOS_API_URL`.
+
+## Frontend publico y APIs privadas
+
+Cuando el frontend se sirve desde una EC2 publica y las APIs estan en una EC2 privada, el navegador no debe consumir directamente la IP privada. En su lugar, la app llama rutas relativas del nginx publico:
+
+```text
+/api/ventas/ventas
+/api/despachos/despachos
+```
+
+Dentro del contenedor, nginx hace reverse proxy hacia las APIs privadas:
+
+```text
+/api/ventas/     -> PRIVATE_VENTAS_API_URL
+/api/despachos/  -> PRIVATE_DESPACHOS_API_URL
+```
+
+Ejemplo para AWS:
+
+```text
+APP_VENTAS_API_URL=/api/ventas
+APP_DESPACHOS_API_URL=/api/despachos
+PRIVATE_VENTAS_API_URL=http://10.0.2.15:8082/api/v1
+PRIVATE_DESPACHOS_API_URL=http://10.0.2.16:8081/api/v1
+```
+
+La EC2 publica debe poder conectarse por red privada a la EC2 privada. El Security Group de la EC2 privada debe permitir entrada a los puertos de las APIs solo desde el Security Group de la EC2 publica.
 
 ## Pipeline CI/CD
 
@@ -162,8 +197,8 @@ DOCKERHUB_TOKEN=<token-dockerhub>
 EC2_HOST=<ip-publica-o-dns-publico-del-ec2>
 EC2_USER=ubuntu
 EC2_SSH_KEY=<contenido-completo-de-la-llave-privada-pem>
-APP_VENTAS_API_URL=<url-api-ventas>
-APP_DESPACHOS_API_URL=<url-api-despachos>
+PRIVATE_VENTAS_API_URL=<url-privada-api-ventas>
+PRIVATE_DESPACHOS_API_URL=<url-privada-api-despachos>
 ```
 
 `EC2_HOST` normalmente es la IP publica de la instancia EC2, por ejemplo:
@@ -194,6 +229,8 @@ En AWS Academy los laboratorios suelen reiniciarse o recrearse. Por eso algunos 
 - `EC2_SSH_KEY`: puede cambiar si se crea una nueva key pair para el laboratorio.
 - `EC2_USER`: para Ubuntu normalmente es `ubuntu`, pero conviene confirmarlo si se usa otra AMI.
 - Security Group: debe permitir SSH `22` desde GitHub Actions o desde internet, y HTTP `80` para acceder al frontend.
+- Security Group privado: debe permitir los puertos de las APIs desde la EC2 publica, por ejemplo `8081` y `8082`.
+- `PRIVATE_VENTAS_API_URL` y `PRIVATE_DESPACHOS_API_URL`: cambian si se recrean las instancias privadas o cambian sus IP privadas.
 - Docker y Git: deben estar instalados en la instancia EC2 antes del despliegue.
 
 Si cambia la IP publica o la llave del laboratorio, actualiza los repository secrets en GitHub antes de hacer push a `master`.
@@ -202,6 +239,7 @@ Si cambia la IP publica o la llave del laboratorio, actualiza los repository sec
 
 - [Dockerfile](/C:/Users/marti/Desktop/devops/front_despacho/Dockerfile)
 - [nginx/default.conf](/C:/Users/marti/Desktop/devops/front_despacho/nginx/default.conf)
+- [docker/nginx.default.conf.template](/C:/Users/marti/Desktop/devops/front_despacho/docker/nginx.default.conf.template)
 - [docker-entrypoint.d/40-generate-config.sh](/C:/Users/marti/Desktop/devops/front_despacho/docker-entrypoint.d/40-generate-config.sh)
 - [src/config.js](/C:/Users/marti/Desktop/devops/front_despacho/src/config.js)
 - [.github/workflows/deploy.yaml](/C:/Users/marti/Desktop/devops/front_despacho/.github/workflows/deploy.yaml)
@@ -209,4 +247,4 @@ Si cambia la IP publica o la llave del laboratorio, actualiza los repository sec
 ## Notas
 
 - Si los backends corren fuera del contenedor en tu maquina local, `host.docker.internal` suele ser la opcion correcta para Docker Desktop.
-- Si el frontend se despliega junto con APIs en otra red o cluster, debes ajustar `APP_VENTAS_API_URL` y `APP_DESPACHOS_API_URL` a las URLs accesibles desde el navegador del usuario.
+- En despliegues con APIs privadas, manten `APP_VENTAS_API_URL` y `APP_DESPACHOS_API_URL` como rutas relativas y ajusta `PRIVATE_VENTAS_API_URL` y `PRIVATE_DESPACHOS_API_URL` hacia las IPs privadas accesibles desde nginx.

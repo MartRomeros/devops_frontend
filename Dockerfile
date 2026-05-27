@@ -12,9 +12,9 @@ FROM nginx:1.27-alpine AS runner
 
 RUN apk add --no-cache gettext
 
-COPY nginx/default.conf /etc/nginx/conf.d/default.conf
 COPY docker-entrypoint.d/40-generate-config.sh /docker-entrypoint.d/40-generate-config.sh
 COPY docker/config.template.js /opt/config-templates/config.template.js
+COPY docker/nginx.default.conf.template /opt/config-templates/nginx.default.conf.template
 COPY --from=builder /app/dist /usr/share/nginx/html
 
 RUN chmod +x /docker-entrypoint.d/40-generate-config.sh

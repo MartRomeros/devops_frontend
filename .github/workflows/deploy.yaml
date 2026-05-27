@@ -111,6 +111,8 @@ jobs:
               --name "$CONTAINER_NAME" \
               --restart unless-stopped \
               -p 80:80 \
-              -e APP_VENTAS_API_URL="${{ secrets.APP_VENTAS_API_URL }}" \
-              -e APP_DESPACHOS_API_URL="${{ secrets.APP_DESPACHOS_API_URL }}" \
+              -e APP_VENTAS_API_URL="/api/ventas" \
+              -e APP_DESPACHOS_API_URL="/api/despachos" \
+              -e PRIVATE_VENTAS_API_URL="${{ secrets.PRIVATE_VENTAS_API_URL }}" \
+              -e PRIVATE_DESPACHOS_API_URL="${{ secrets.PRIVATE_DESPACHOS_API_URL }}" \
               "$IMAGE_NAME:latest"
