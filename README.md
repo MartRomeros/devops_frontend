@@ -124,12 +124,87 @@ window.__APP_CONFIG__ = {
 
 Con esto, la misma imagen Docker puede reutilizarse en distintos ambientes sin recompilar.
 
+## Pipeline CI/CD
+
+El workflow principal esta en [.github/workflows/deploy.yaml](/C:/Users/marti/Desktop/devops/front_despacho/.github/workflows/deploy.yaml). Se ejecuta cuando hay un push a la rama `master`.
+
+El flujo del pipeline es:
+
+1. GitHub Actions descarga el repositorio.
+2. Configura Node.js 20.
+3. Instala dependencias con `npm ci`.
+4. Compila el frontend con `npm run build`.
+5. Configura Docker Buildx.
+6. Inicia sesion en Docker Hub.
+7. Construye la imagen desde el `Dockerfile` de la raiz.
+8. Publica la imagen en Docker Hub con estos tags:
+
+```text
+<DOCKERHUB_USERNAME>/front-despacho:latest
+<DOCKERHUB_USERNAME>/front-despacho:<github.sha>
+```
+
+9. Se conecta por SSH al EC2.
+10. Verifica que el EC2 tenga `git` y `docker`.
+11. Si es primera ejecucion, clona el repositorio en el EC2.
+12. Si ya existe el repositorio, hace pull de los cambios de `master`.
+13. Hace `docker pull` de la imagen `latest`.
+14. Elimina el contenedor anterior si existe.
+15. Levanta el nuevo contenedor en el puerto `80`.
+
+## Secrets para GitHub Actions
+
+Configura estos valores en `Settings > Secrets and variables > Actions > Repository secrets`.
+
+```text
+DOCKERHUB_USERNAME=<usuario-dockerhub>
+DOCKERHUB_TOKEN=<token-dockerhub>
+EC2_HOST=<ip-publica-o-dns-publico-del-ec2>
+EC2_USER=ubuntu
+EC2_SSH_KEY=<contenido-completo-de-la-llave-privada-pem>
+APP_VENTAS_API_URL=<url-api-ventas>
+APP_DESPACHOS_API_URL=<url-api-despachos>
+```
+
+`EC2_HOST` normalmente es la IP publica de la instancia EC2, por ejemplo:
+
+```text
+EC2_HOST=18.222.10.55
+```
+
+Tambien puede ser el DNS publico de AWS:
+
+```text
+EC2_HOST=ec2-18-222-10-55.us-east-2.compute.amazonaws.com
+```
+
+`EC2_SSH_KEY` debe ser el contenido completo de la llave privada, incluyendo las lineas `BEGIN` y `END`:
+
+```text
+-----BEGIN OPENSSH PRIVATE KEY-----
+...
+-----END OPENSSH PRIVATE KEY-----
+```
+
+## Consideraciones para AWS Academy
+
+En AWS Academy los laboratorios suelen reiniciarse o recrearse. Por eso algunos datos pueden cambiar y se deben revisar antes de ejecutar el pipeline:
+
+- `EC2_HOST`: cambia si la instancia obtiene una nueva IP publica.
+- `EC2_SSH_KEY`: puede cambiar si se crea una nueva key pair para el laboratorio.
+- `EC2_USER`: para Ubuntu normalmente es `ubuntu`, pero conviene confirmarlo si se usa otra AMI.
+- Security Group: debe permitir SSH `22` desde GitHub Actions o desde internet, y HTTP `80` para acceder al frontend.
+- Docker y Git: deben estar instalados en la instancia EC2 antes del despliegue.
+
+Si cambia la IP publica o la llave del laboratorio, actualiza los repository secrets en GitHub antes de hacer push a `master`.
+
 ## Archivos relevantes
 
 - [Dockerfile](/C:/Users/marti/Desktop/devops/front_despacho/Dockerfile)
 - [nginx/default.conf](/C:/Users/marti/Desktop/devops/front_despacho/nginx/default.conf)
 - [docker-entrypoint.d/40-generate-config.sh](/C:/Users/marti/Desktop/devops/front_despacho/docker-entrypoint.d/40-generate-config.sh)
 - [src/config.js](/C:/Users/marti/Desktop/devops/front_despacho/src/config.js)
+- [.github/workflows/deploy.yaml](/C:/Users/marti/Desktop/devops/front_despacho/.github/workflows/deploy.yaml)
 
 ## Notas
 
