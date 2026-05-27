@@ -1,42 +1,98 @@
-# React + Vite - Front Despacho
+# Front Despacho
 
-This project is a React application set up with Vite. 
+Este repositorio contiene el código fuente para el frontend del proyecto "Front Despacho", una aplicación web desarrollada con React y Vite.
 
-## Docker Configuration
+## Tecnologías Utilizadas
 
-This project includes configuration files to run the frontend inside a Docker container using a **multi-stage build** for optimal performance and smaller image sizes.
+El proyecto está construido utilizando las siguientes tecnologías y librerías principales:
+- **React (v18):** Biblioteca principal para la construcción de interfaces de usuario.
+- **Vite:** Herramienta de construcción (bundler) rápida para el desarrollo frontend.
+- **Tailwind CSS:** Framework de CSS utilitario para el diseño rápido y responsivo.
+- **React Router DOM:** Manejo de rutas y navegación dentro de la aplicación.
+- **React Hook Form:** Gestión eficiente y validación de formularios.
+- **Axios:** Cliente HTTP para realizar peticiones a la API backend.
+- **SweetAlert2:** Para mostrar alertas y notificaciones modales estilizadas.
+- **React Icons:** Colección de íconos vectoriales.
 
-### 1. Dockerfile
+## Funcionamiento del Proyecto
 
-El `Dockerfile` fue generado utilizando un enfoque de múltiples etapas (multi-stage build) que consta de dos partes principales:
+El proyecto se encarga de la interfaz de usuario para el sistema de despacho. Permite a los usuarios interactuar con la plataforma de forma ágil y dinámica gracias al enrutamiento del lado del cliente y las peticiones asíncronas hacia el backend a través de Axios. 
 
-- **Etapa 1 (Build):** Utiliza la imagen oficial de `node:18-alpine` para instalar las dependencias (`npm install`) y compilar la aplicación React/Vite para producción (`npm run build`). Esto genera los archivos estáticos en la carpeta `dist`.
-- **Etapa 2 (Producción):** Utiliza la imagen ligera de `nginx:alpine`. Copia únicamente la carpeta `dist` generada en la etapa anterior y la aloja en la ruta pública de Nginx (`/usr/share/nginx/html`). Se expone el puerto 80 para el servidor web.
+El diseño está completamente enfocado en componentes reutilizables y un estilizado manejado por Tailwind CSS, asegurando que la interfaz sea amigable tanto en escritorio como en dispositivos móviles.
 
-Este enfoque asegura que el contenedor final no contenga código fuente ni dependencias de Node.js, reduciendo drásticamente su peso y mejorando la seguridad. Además, se configuró un archivo `.dockerignore` para excluir carpetas innecesarias como `node_modules`.
+---
 
-### 2. Docker Compose
+## Cómo Utilizar el Proyecto (Entorno de Desarrollo Local)
 
-El archivo `docker-compose.yml` fue generado para simplificar la orquestación del contenedor. 
+Si deseas correr o modificar el código de forma local sin Docker, necesitas tener instalado **Node.js** (se recomienda versión 18 o superior).
 
-Configuraciones principales del servicio `frontend`:
-- **build:** Le indica a Docker Compose que debe construir la imagen utilizando el directorio actual (`context: .`) y el archivo `Dockerfile`.
-- **container_name:** Asigna el nombre `front-despacho-app` al contenedor para facilitar su identificación.
-- **ports:** Mapea el puerto `8080` de tu máquina local (host) al puerto `80` del contenedor (donde Nginx está sirviendo la aplicación).
-- **restart:** La política `unless-stopped` asegura que el contenedor se reiniciará automáticamente si falla o si el equipo se reinicia, a menos que se detenga manualmente.
+### 1. Instalación de dependencias
+Abre una terminal en la raíz del proyecto y ejecuta:
+```bash
+npm install
+```
 
-### Instrucciones de Uso
+### 2. Ejecutar el servidor de desarrollo
+Para iniciar la aplicación en modo desarrollo con recarga en caliente (Hot Module Replacement):
+```bash
+npm run dev
+```
+La aplicación estará disponible típicamente en `http://localhost:5173`.
 
-Para levantar el proyecto utilizando Docker Compose, simplemente abre una terminal en la raíz de este proyecto y ejecuta:
+### 3. Construcción para Producción
+Para generar una versión estática optimizada lista para producción:
+```bash
+npm run build
+```
+Esto creará una carpeta `dist/` con los archivos compilados.
+
+---
+
+## Cómo Utilizar el Proyecto (Entorno Dockerizado)
+
+Este proyecto incluye configuración para ser levantado fácilmente mediante contenedores Docker, lo cual asegura que funcionará de manera idéntica en cualquier equipo. Se utiliza un enfoque de **múltiples etapas (multi-stage build)** para optimizar el tamaño de la imagen final.
+
+### Requisitos
+- Docker
+- Docker Compose
+
+### Levantar el proyecto
+Para construir y ejecutar la aplicación usando los contenedores, simplemente abre una terminal en la raíz del proyecto y ejecuta:
 
 ```bash
 docker-compose up -d --build
 ```
 
-Una vez que termine de construir y levantar, podrás ver tu aplicación ingresando a:
+Esto realizará lo siguiente:
+1. **Etapa de compilación:** Utilizará una imagen de `node:20-alpine` para instalar las dependencias (`npm install`) y compilar la aplicación (`npm run build`).
+2. **Etapa de producción:** Utilizará un servidor web `nginx:1.25-alpine` para servir los archivos estáticos de la carpeta `dist`.
+
+Una vez finalizado, podrás acceder a la aplicación en tu navegador web ingresando a:
 **http://localhost:8080**
 
-Para detener la aplicación, ejecuta:
+### Detener el proyecto
+Para detener y remover los contenedores:
 ```bash
 docker-compose down
 ```
+
+---
+
+## Pipeline CI/CD (GitHub Actions)
+
+Este proyecto incluye un pipeline de Integración Continua (CI) implementado con **GitHub Actions**. El archivo de configuración se encuentra en `.github/workflows/ci.yml`.
+
+Cada vez que se realiza un `push` o se abre un `pull request` hacia las ramas `main` o `master`, el pipeline ejecuta automáticamente los siguientes pasos para asegurar la calidad del código:
+
+1. **Instalación y Verificación (Node.js):** 
+   - Instala las dependencias (`npm install`).
+   - Ejecuta el linter para mantener estándares de código (`npm run lint`).
+   - Comprueba que el proyecto compila correctamente (`npm run build`).
+2. **Validación de Docker:**
+   - Construye la imagen de Docker usando `docker-compose build` para asegurar que el `Dockerfile` y las configuraciones no se hayan roto con los nuevos cambios.
+
+---
+
+## Historial y Commits Explicativos
+
+> **Nota para los desarrolladores:** Según los requerimientos, asegúrese de revisar el historial de commits. Se han utilizado mensajes descriptivos para evidenciar claramente cada `feat` (nueva característica), `fix` (corrección de errores), y `update` (actualizaciones y refactorizaciones) realizados en el código base, manteniendo así una trazabilidad completa de los cambios del proyecto.
