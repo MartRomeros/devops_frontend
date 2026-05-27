@@ -1,6 +1,6 @@
 # Front Despacho
 
-Aplicacion frontend construida con React y Vite para gestionar compras y despachos. La interfaz permite consultar ventas pendientes, generar despachos asociados y cerrar despachos existentes.
+Frontend React + Vite para consultar ventas pendientes, generar ordenes de despacho y cerrar despachos. La aplicacion se construye como archivos estaticos y se sirve con nginx dentro de un contenedor Docker.
 
 ## Stack
 
@@ -9,93 +9,100 @@ Aplicacion frontend construida con React y Vite para gestionar compras y despach
 - Axios
 - React Hook Form
 - Tailwind CSS
-- Docker
+- Docker multistage
 - nginx
 
-## Variables de entorno
+## Arquitectura actual
 
-La aplicacion consume dos servicios backend:
+En produccion, el frontend se despliega en una EC2 publica y consume APIs que pueden estar en una EC2 privada.
 
-- `VENTAS`: operaciones sobre ventas y compras
-- `DESPACHOS`: operaciones sobre despachos
+```text
+Navegador
+  -> EC2 publica / nginx / contenedor frontend
+  -> reverse proxy nginx
+  -> APIs privadas en la VPC
+```
 
-Para desarrollo local, Vite puede leer estas variables desde un archivo `.env`:
+El navegador no llama directamente a las IPs privadas. React llama rutas relativas del mismo host publico:
+
+```text
+/api/ventas
+/api/despachos
+```
+
+nginx reenvia esas rutas a los endpoints privados configurados en runtime:
+
+```text
+/api/ventas/     -> PRIVATE_VENTAS_API_URL
+/api/despachos/  -> PRIVATE_DESPACHOS_API_URL
+```
+
+## Variables
+
+Para desarrollo local con Vite puedes usar [.env.example](/C:/Users/marti/Desktop/devops/front_despacho/.env.example):
 
 ```env
 VITE_VENTAS_API_URL=http://localhost:8082/api/v1
 VITE_DESPACHOS_API_URL=http://localhost:8081/api/v1
 ```
 
-Existe un ejemplo base en [.env.example](/C:/Users/marti/Desktop/devops/front_despacho/.env.example).
+Para contenedor se usan variables de runtime:
 
-Para ejecucion en contenedor, la imagen usa variables de runtime:
+```text
+APP_VENTAS_API_URL=/api/ventas
+APP_DESPACHOS_API_URL=/api/despachos
+PRIVATE_VENTAS_API_URL=http://10.0.2.15:8082/api/v1
+PRIVATE_DESPACHOS_API_URL=http://10.0.2.16:8081/api/v1
+```
 
-- `APP_VENTAS_API_URL`
-- `APP_DESPACHOS_API_URL`
-- `PRIVATE_VENTAS_API_URL`
-- `PRIVATE_DESPACHOS_API_URL`
+`APP_*` son las rutas que usa el navegador. `PRIVATE_*` son las URLs reales que nginx puede alcanzar desde la EC2 publica hacia la red privada.
 
-Si no se definen, el contenedor usa estos valores por defecto:
-
-- `APP_VENTAS_API_URL=/api/ventas`
-- `APP_DESPACHOS_API_URL=/api/despachos`
-- `PRIVATE_VENTAS_API_URL=http://localhost:8082/api/v1`
-- `PRIVATE_DESPACHOS_API_URL=http://localhost:8081/api/v1`
-
-## Instalacion de dependencias
+## Instalacion Local
 
 Requisitos:
 
 - Node.js 20 o superior
 - npm 10 o superior
 
-Instalacion:
+Instalar dependencias:
 
 ```bash
 npm ci
 ```
 
-## Ejecucion local
-
-1. Crear archivo `.env` a partir de `.env.example` si necesitas cambiar endpoints.
-2. Instalar dependencias con `npm ci`.
-3. Levantar el entorno de desarrollo:
+Ejecutar en desarrollo:
 
 ```bash
 npm run dev
 ```
 
-4. Abrir la URL que entregue Vite, normalmente `http://localhost:5173`.
-
-## Build local
-
-Para generar los archivos estaticos:
+Generar build:
 
 ```bash
 npm run build
 ```
 
-Para previsualizar el build:
+Previsualizar build:
 
 ```bash
 npm run preview
 ```
 
-## Ejecucion con Docker
+## Docker
 
 La imagen usa un `Dockerfile` multistage:
 
-1. Etapa `builder`: instala dependencias y ejecuta `npm run build`.
-2. Etapa final: usa `nginx:alpine` para servir el contenido de `dist/`.
-3. En el arranque del contenedor se genera `config.js` con los endpoints definidos por variables de entorno.
+1. `node:20-alpine` instala dependencias y ejecuta `npm run build`.
+2. `nginx:1.27-alpine` sirve `dist/`.
+3. Al iniciar el contenedor se generan `config.js` y la configuracion nginx desde templates.
 
-### Construir la imagen
+Construir imagen:
 
 ```bash
 docker build -t front-despacho .
 ```
 
-### Ejecutar el contenedor
+Ejecutar en Windows PowerShell:
 
 ```bash
 docker run --rm -p 8080:80 ^
@@ -106,7 +113,7 @@ docker run --rm -p 8080:80 ^
   front-despacho
 ```
 
-En sistemas tipo Unix, el mismo comando seria:
+Ejecutar en Linux/macOS:
 
 ```bash
 docker run --rm -p 8080:80 \
@@ -117,11 +124,11 @@ docker run --rm -p 8080:80 \
   front-despacho
 ```
 
-Luego la aplicacion quedara disponible en `http://localhost:8080`.
+La aplicacion quedara disponible en `http://localhost:8080`.
 
-## Como funciona la configuracion runtime
+## Configuracion Runtime
 
-La aplicacion carga `/config.js` antes del bundle principal. Ese archivo es generado por `nginx` al iniciar el contenedor y expone:
+El frontend carga `/config.js` antes del bundle principal:
 
 ```js
 window.__APP_CONFIG__ = {
@@ -130,90 +137,52 @@ window.__APP_CONFIG__ = {
 };
 ```
 
-Con esto, el navegador llama al mismo host publico del frontend y nginx reenvia las peticiones hacia las APIs configuradas en `PRIVATE_VENTAS_API_URL` y `PRIVATE_DESPACHOS_API_URL`.
-
-## Frontend publico y APIs privadas
-
-Cuando el frontend se sirve desde una EC2 publica y las APIs estan en una EC2 privada, el navegador no debe consumir directamente la IP privada. En su lugar, la app llama rutas relativas del nginx publico:
-
-```text
-/api/ventas/ventas
-/api/despachos/despachos
-```
-
-Dentro del contenedor, nginx hace reverse proxy hacia las APIs privadas:
-
-```text
-/api/ventas/     -> PRIVATE_VENTAS_API_URL
-/api/despachos/  -> PRIVATE_DESPACHOS_API_URL
-```
-
-Ejemplo para AWS:
-
-```text
-APP_VENTAS_API_URL=/api/ventas
-APP_DESPACHOS_API_URL=/api/despachos
-PRIVATE_VENTAS_API_URL=http://10.0.2.15:8082/api/v1
-PRIVATE_DESPACHOS_API_URL=http://10.0.2.16:8081/api/v1
-```
-
-La EC2 publica debe poder conectarse por red privada a la EC2 privada. El Security Group de la EC2 privada debe permitir entrada a los puertos de las APIs solo desde el Security Group de la EC2 publica.
+Ese archivo se genera al iniciar el contenedor desde [docker/config.template.js](/C:/Users/marti/Desktop/devops/front_despacho/docker/config.template.js). La configuracion nginx se genera desde [docker/nginx.default.conf.template](/C:/Users/marti/Desktop/devops/front_despacho/docker/nginx.default.conf.template).
 
 ## Pipeline CI/CD
 
-El workflow principal esta en [.github/workflows/deploy.yaml](/C:/Users/marti/Desktop/devops/front_despacho/.github/workflows/deploy.yaml). Se ejecuta cuando hay un push a la rama `master`.
+El workflow principal esta en [.github/workflows/deploy.yaml](/C:/Users/marti/Desktop/devops/front_despacho/.github/workflows/deploy.yaml). Se ejecuta con cada push a `master`.
 
-El flujo del pipeline es:
+Flujo:
 
-1. GitHub Actions descarga el repositorio.
+1. Descarga el repositorio.
 2. Configura Node.js 20.
-3. Instala dependencias con `npm ci`.
-4. Compila el frontend con `npm run build`.
+3. Ejecuta `npm ci`.
+4. Ejecuta `npm run build`.
 5. Configura Docker Buildx.
 6. Inicia sesion en Docker Hub.
-7. Construye la imagen desde el `Dockerfile` de la raiz.
-8. Publica la imagen en Docker Hub con estos tags:
+7. Construye la imagen desde [Dockerfile](/C:/Users/marti/Desktop/devops/front_despacho/Dockerfile).
+8. Publica tags `latest` y `${{ github.sha }}` en Docker Hub.
+9. Se conecta por SSH al EC2 publico.
+10. Verifica que existan `git` y `docker`.
+11. Clona o actualiza el repositorio en `/home/<EC2_USER>/devops_frontend`.
+12. Hace `docker pull` de la imagen `latest`.
+13. Elimina el contenedor anterior si existe.
+14. Levanta el contenedor nuevo en el puerto `80`.
 
-```text
-<DOCKERHUB_USERNAME>/front-despacho:latest
-<DOCKERHUB_USERNAME>/front-despacho:<github.sha>
-```
+## Secrets de GitHub Actions
 
-9. Se conecta por SSH al EC2.
-10. Verifica que el EC2 tenga `git` y `docker`.
-11. Si es primera ejecucion, clona el repositorio en el EC2.
-12. Si ya existe el repositorio, hace pull de los cambios de `master`.
-13. Hace `docker pull` de la imagen `latest`.
-14. Elimina el contenedor anterior si existe.
-15. Levanta el nuevo contenedor en el puerto `80`.
-
-## Secrets para GitHub Actions
-
-Configura estos valores en `Settings > Secrets and variables > Actions > Repository secrets`.
+Configura estos valores en `Settings > Secrets and variables > Actions > Repository secrets`:
 
 ```text
 DOCKERHUB_USERNAME=<usuario-dockerhub>
 DOCKERHUB_TOKEN=<token-dockerhub>
-EC2_HOST=<ip-publica-o-dns-publico-del-ec2>
+EC2_HOST=<ip-publica-o-dns-publico-del-ec2-publico>
 EC2_USER=ubuntu
 EC2_SSH_KEY=<contenido-completo-de-la-llave-privada-pem>
 PRIVATE_VENTAS_API_URL=<url-privada-api-ventas>
 PRIVATE_DESPACHOS_API_URL=<url-privada-api-despachos>
 ```
 
-`EC2_HOST` normalmente es la IP publica de la instancia EC2, por ejemplo:
+Ejemplo:
 
 ```text
 EC2_HOST=18.222.10.55
+PRIVATE_VENTAS_API_URL=http://10.0.2.15:8082/api/v1
+PRIVATE_DESPACHOS_API_URL=http://10.0.2.16:8081/api/v1
 ```
 
-Tambien puede ser el DNS publico de AWS:
-
-```text
-EC2_HOST=ec2-18-222-10-55.us-east-2.compute.amazonaws.com
-```
-
-`EC2_SSH_KEY` debe ser el contenido completo de la llave privada, incluyendo las lineas `BEGIN` y `END`:
+`EC2_SSH_KEY` debe ser el contenido completo de la llave privada:
 
 ```text
 -----BEGIN OPENSSH PRIVATE KEY-----
@@ -221,30 +190,36 @@ EC2_HOST=ec2-18-222-10-55.us-east-2.compute.amazonaws.com
 -----END OPENSSH PRIVATE KEY-----
 ```
 
-## Consideraciones para AWS Academy
+No necesitas crear secrets para `APP_VENTAS_API_URL` ni `APP_DESPACHOS_API_URL`; el workflow los fija como `/api/ventas` y `/api/despachos`.
 
-En AWS Academy los laboratorios suelen reiniciarse o recrearse. Por eso algunos datos pueden cambiar y se deben revisar antes de ejecutar el pipeline:
+## AWS Academy
 
-- `EC2_HOST`: cambia si la instancia obtiene una nueva IP publica.
-- `EC2_SSH_KEY`: puede cambiar si se crea una nueva key pair para el laboratorio.
-- `EC2_USER`: para Ubuntu normalmente es `ubuntu`, pero conviene confirmarlo si se usa otra AMI.
-- Security Group: debe permitir SSH `22` desde GitHub Actions o desde internet, y HTTP `80` para acceder al frontend.
-- Security Group privado: debe permitir los puertos de las APIs desde la EC2 publica, por ejemplo `8081` y `8082`.
-- `PRIVATE_VENTAS_API_URL` y `PRIVATE_DESPACHOS_API_URL`: cambian si se recrean las instancias privadas o cambian sus IP privadas.
-- Docker y Git: deben estar instalados en la instancia EC2 antes del despliegue.
+En AWS Academy algunos valores pueden cambiar cuando se reinicia o recrea el laboratorio:
 
-Si cambia la IP publica o la llave del laboratorio, actualiza los repository secrets en GitHub antes de hacer push a `master`.
+- `EC2_HOST`: cambia si la EC2 publica recibe una nueva IP publica.
+- `EC2_SSH_KEY`: cambia si usas una nueva key pair.
+- `PRIVATE_VENTAS_API_URL`: cambia si cambia la IP privada de la EC2/API de ventas.
+- `PRIVATE_DESPACHOS_API_URL`: cambia si cambia la IP privada de la EC2/API de despachos.
+- `EC2_USER`: para Ubuntu normalmente es `ubuntu`.
 
-## Archivos relevantes
+Security Groups necesarios:
+
+- EC2 publica: permitir HTTP `80` desde internet.
+- EC2 publica: permitir SSH `22` para despliegue.
+- EC2 privada/API ventas: permitir su puerto, por ejemplo `8082`, desde la EC2 publica.
+- EC2 privada/API despachos: permitir su puerto, por ejemplo `8081`, desde la EC2 publica.
+
+La EC2 publica debe tener `docker` y `git` instalados antes de ejecutar el pipeline.
+
+## Datos de Prueba
+
+El archivo [script.sql](/C:/Users/marti/Desktop/devops/front_despacho/script.sql) contiene datos de ejemplo para `productos`, `ventas` y `despachos`, alineados con la forma que devuelven los endpoints consumidos por el frontend.
+
+## Archivos Clave
 
 - [Dockerfile](/C:/Users/marti/Desktop/devops/front_despacho/Dockerfile)
-- [nginx/default.conf](/C:/Users/marti/Desktop/devops/front_despacho/nginx/default.conf)
-- [docker/nginx.default.conf.template](/C:/Users/marti/Desktop/devops/front_despacho/docker/nginx.default.conf.template)
 - [docker-entrypoint.d/40-generate-config.sh](/C:/Users/marti/Desktop/devops/front_despacho/docker-entrypoint.d/40-generate-config.sh)
+- [docker/config.template.js](/C:/Users/marti/Desktop/devops/front_despacho/docker/config.template.js)
+- [docker/nginx.default.conf.template](/C:/Users/marti/Desktop/devops/front_despacho/docker/nginx.default.conf.template)
 - [src/config.js](/C:/Users/marti/Desktop/devops/front_despacho/src/config.js)
 - [.github/workflows/deploy.yaml](/C:/Users/marti/Desktop/devops/front_despacho/.github/workflows/deploy.yaml)
-
-## Notas
-
-- Si los backends corren fuera del contenedor en tu maquina local, `host.docker.internal` suele ser la opcion correcta para Docker Desktop.
-- En despliegues con APIs privadas, manten `APP_VENTAS_API_URL` y `APP_DESPACHOS_API_URL` como rutas relativas y ajusta `PRIVATE_VENTAS_API_URL` y `PRIVATE_DESPACHOS_API_URL` hacia las IPs privadas accesibles desde nginx.
